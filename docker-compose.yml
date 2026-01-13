@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: london_events_db
+    environment:
+      POSTGRES_DB: london_events
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Application
+  app:
+    build: .
+    container_name: london_events_app
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/london_events
+      APP_ENV: development
+      DEBUG: "True"
+      SECRET_KEY: "dev-secret-key-change-in-production"
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Database migrations (run once)
+  migrate:
+    build: .
+    container_name: london_events_migrate
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/london_events
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    command: python -c "from app.database import init_db; init_db()"
+    profiles:
+      - setup
+
+volumes:
+  postgres_data:
