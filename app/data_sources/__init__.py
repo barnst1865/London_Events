@@ -9,6 +9,10 @@ from .seatgeek import SeatGeekSource
 
 # Import scrapers
 from .scrapers.timeout_london import TimeOutLondonScraper
+from .scrapers.o2_arena import O2ArenaScraper
+from .scrapers.royal_albert_hall import RoyalAlbertHallScraper
+from .scrapers.barbican import BarbicanScraper
+from .scrapers.southbank_centre import SouthbankCentreScraper
 
 
 # Registry of all available data sources
@@ -18,6 +22,10 @@ DATA_SOURCES: List[Type[BaseDataSource]] = [
     EventbriteSource,
     SeatGeekSource,
     TimeOutLondonScraper,
+    O2ArenaScraper,
+    RoyalAlbertHallScraper,
+    BarbicanScraper,
+    SouthbankCentreScraper,
 ]
 
 
