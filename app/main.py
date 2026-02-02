@@ -1,14 +1,12 @@
 """Main FastAPI application."""
-from fastapi import FastAPI, Depends, HTTPException, Request
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import logging
 
 from .config import settings
 from .database import get_db, init_db
-from .api import events, subscriptions, auth
+from .api import events
 
 # Configure logging
 logging.basicConfig(
@@ -21,8 +19,8 @@ logger = logging.getLogger(__name__)
 # Create FastAPI app
 app = FastAPI(
     title=settings.app_name,
-    version="0.1.0",
-    description="Monthly newsletter of upcoming events in London",
+    version="0.2.0",
+    description="Event aggregation engine for London — powers a Substack newsletter",
     debug=settings.debug
 )
 
@@ -35,17 +33,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files
-# app.mount("/static", StaticFiles(directory="app/static"), name="static")
-
-# Templates
-templates = Jinja2Templates(directory="app/templates/web")
-
-
 # Include API routers
 app.include_router(events.router, prefix="/api/events", tags=["events"])
-app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["subscriptions"])
-app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 
 
 @app.on_event("startup")
@@ -54,7 +43,6 @@ async def startup_event():
     logger.info(f"Starting {settings.app_name}")
     logger.info(f"Environment: {settings.app_env}")
 
-    # Initialize database
     try:
         init_db()
         logger.info("Database initialized")
@@ -68,22 +56,13 @@ async def shutdown_event():
     logger.info("Shutting down application")
 
 
-@app.get("/")
-async def root(request: Request):
-    """Landing page."""
-    return templates.TemplateResponse(
-        "index.html",
-        {"request": request, "title": settings.app_name}
-    )
-
-
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
         "app": settings.app_name,
-        "version": "0.1.0",
+        "version": "0.2.0",
         "environment": settings.app_env
     }
 

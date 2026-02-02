@@ -182,6 +182,7 @@ cython_debug/
 
 # Project specific
 logs/
+output/
 *.db
 .DS_Store
 alembic/versions/*.pyc

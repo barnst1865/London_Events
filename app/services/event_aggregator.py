@@ -1,6 +1,6 @@
 """Event aggregation service - fetches and deduplicates events from all sources."""
 import logging
-from typing import List, Dict, Tuple
+from typing import List, Dict
 from datetime import datetime
 from difflib import SequenceMatcher
 from sqlalchemy.orm import Session

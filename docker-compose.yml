@@ -19,7 +19,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # FastAPI Application
+  # FastAPI Application + Scheduler
   app:
     build: .
     container_name: london_events_app
@@ -29,7 +29,6 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/london_events
       APP_ENV: development
       DEBUG: "True"
-      SECRET_KEY: "dev-secret-key-change-in-production"
     env_file:
       - .env
     depends_on:
@@ -37,6 +36,7 @@ services:
         condition: service_healthy
     volumes:
       - ./app:/app/app
+      - ./output:/app/output
       - ./logs:/app/logs
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 

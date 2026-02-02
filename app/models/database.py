@@ -11,13 +11,6 @@ import enum
 Base = declarative_base()
 
 
-class SubscriptionTier(str, enum.Enum):
-    """Subscription tier levels."""
-    FREE = "free"
-    MONTHLY = "monthly"
-    ANNUAL = "annual"
-
-
 class EventStatus(str, enum.Enum):
     """Event status."""
     UPCOMING = "upcoming"
@@ -34,61 +27,6 @@ event_categories = Table(
     Column('event_id', Integer, ForeignKey('events.id')),
     Column('category_id', Integer, ForeignKey('categories.id'))
 )
-
-
-class User(Base):
-    """User model."""
-    __tablename__ = "users"
-
-    id = Column(Integer, primary_key=True, index=True)
-    email = Column(String(255), unique=True, index=True, nullable=False)
-    hashed_password = Column(String(255), nullable=False)
-    full_name = Column(String(255))
-    is_active = Column(Boolean, default=True)
-    is_verified = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    # Relationships
-    subscription = relationship("Subscription", back_populates="user", uselist=False)
-    preferences = relationship("UserPreferences", back_populates="user", uselist=False)
-
-
-class Subscription(Base):
-    """User subscription model."""
-    __tablename__ = "subscriptions"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
-    tier = Column(SQLEnum(SubscriptionTier), default=SubscriptionTier.FREE)
-    stripe_customer_id = Column(String(255), unique=True)
-    stripe_subscription_id = Column(String(255), unique=True)
-    status = Column(String(50), default="active")  # active, cancelled, past_due
-    current_period_start = Column(DateTime)
-    current_period_end = Column(DateTime)
-    cancel_at_period_end = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    # Relationships
-    user = relationship("User", back_populates="subscription")
-
-
-class UserPreferences(Base):
-    """User event preferences."""
-    __tablename__ = "user_preferences"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
-    preferred_categories = Column(JSON)  # List of category IDs
-    exclude_sold_out = Column(Boolean, default=False)
-    notify_on_sale = Column(Boolean, default=True)
-    newsletter_frequency = Column(String(20), default="monthly")  # monthly, weekly
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    # Relationships
-    user = relationship("User", back_populates="preferences")
 
 
 class Category(Base):
@@ -156,17 +94,12 @@ class Event(Base):
     # Metadata
     is_featured = Column(Boolean, default=False)
     popularity_score = Column(Float, default=0.0)
+    first_seen_at = Column(DateTime, default=datetime.utcnow, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     categories = relationship("Category", secondary=event_categories, back_populates="events")
-
-    # Unique constraint on source
-    __table_args__ = (
-        # Ensure we don't duplicate events from the same source
-        # UniqueConstraint('source_name', 'source_id', name='uix_source_event'),
-    )
 
 
 class DataSource(Base):
@@ -186,25 +119,3 @@ class DataSource(Base):
     metadata = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-
-class Newsletter(Base):
-    """Newsletter generation tracking."""
-    __tablename__ = "newsletters"
-
-    id = Column(Integer, primary_key=True, index=True)
-    month = Column(Integer, nullable=False)
-    year = Column(Integer, nullable=False)
-    generation_date = Column(DateTime, nullable=False)
-    events_count = Column(Integer, default=0)
-    sent_count = Column(Integer, default=0)
-    open_rate = Column(Float)
-    click_rate = Column(Float)
-    status = Column(String(50), default="draft")  # draft, sending, sent
-    html_content = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    __table_args__ = (
-        # One newsletter per month
-        # UniqueConstraint('month', 'year', name='uix_newsletter_month'),
-    )

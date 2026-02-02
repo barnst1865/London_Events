@@ -42,7 +42,7 @@ COPY --from=base /usr/local/bin /usr/local/bin
 COPY . .
 
 # Create necessary directories
-RUN mkdir -p /app/logs && chown -R appuser:appuser /app
+RUN mkdir -p /app/logs /app/output && chown -R appuser:appuser /app
 
 # Switch to non-root user
 USER appuser

@@ -16,7 +16,6 @@ class Settings(BaseSettings):
     app_name: str = "London Events Report"
     app_env: str = "development"
     debug: bool = True
-    secret_key: str
 
     # Database
     database_url: str
@@ -27,23 +26,11 @@ class Settings(BaseSettings):
     seatgeek_client_id: Optional[str] = None
     songkick_api_key: Optional[str] = None
 
-    # Email Service
-    sendgrid_api_key: Optional[str] = None
-    from_email: str = "newsletter@londonevents.com"
-    from_name: str = "London Events Report"
-
-    # Stripe
-    stripe_api_key: Optional[str] = None
-    stripe_publishable_key: Optional[str] = None
-    stripe_webhook_secret: Optional[str] = None
-
-    # Subscription Pricing
-    free_events_limit: int = 5
-    monthly_price_id: Optional[str] = None
-    annual_price_id: Optional[str] = None
+    # AI Curation
+    anthropic_api_key: Optional[str] = None
 
     # Scheduling
-    report_generation_day: int = 1
+    report_generation_day_of_week: str = "mon"  # Day of week for weekly generation
     report_generation_hour: int = 9
     report_generation_timezone: str = "Europe/London"
 
@@ -55,6 +42,9 @@ class Settings(BaseSettings):
     scraping_user_agent: str = "Mozilla/5.0 (compatible; LondonEventsBot/1.0)"
     scraping_delay: int = 2
     scraping_timeout: int = 30
+
+    # Output
+    output_dir: str = "output"
 
     @property
     def is_production(self) -> bool:
