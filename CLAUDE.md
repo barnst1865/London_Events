@@ -115,3 +115,25 @@ PostgreSQL with SQLAlchemy ORM. No Alembic migrations — schema created via `Ba
 ## Environment
 
 Copy `.env.example` to `.env`. Required: `DATABASE_URL`. Optional: API keys for Ticketmaster/Eventbrite/SeatGeek enable their respective sources. `ANTHROPIC_API_KEY` enables AI-powered curation (falls back to deterministic selection without it).
+
+## Implementation Status
+
+The project is being restructured from a self-hosted newsletter service into a Substack-focused event aggregation engine. Work is tracked in phases:
+
+### Phase 1: Strip Infrastructure + Build Core Pipeline — DONE
+Removed auth, payments, email delivery, subscription infrastructure (~1,100 lines deleted). Added AI curator, content generator, and CLI entry points (~700 lines added). The app now produces Substack-ready HTML via `generate_newsletter.py` and `generate_alert.py`.
+
+### Phase 2: Fix Existing Scrapers — TODO (start here)
+The 5 existing scrapers (`timeout_london.py`, `o2_arena.py`, `royal_albert_hall.py`, `barbican.py`, `southbank_centre.py`) have fragile date parsing, guessed CSS selectors, and default to `datetime.now()` when parsing fails. Each scraper needs to be validated against its live site and fixed to skip events it can't parse cleanly rather than inserting garbage data.
+
+### Phase 3: Expand Data Sources — West End & Large Venues — TODO
+Add Official London Theatre (West End), Alexandra Palace, Roundhouse, KOKO, Eventim Apollo, Brixton Academy scrapers.
+
+### Phase 4: Expand Data Sources — DICE & Resident Advisor — TODO
+Cover indie/alternative (dice.fm) and electronic/club scenes (ra.co). JS-heavy sites may need headless browser.
+
+### Phase 5: Sellout Alert System — TODO
+Automated availability monitoring, threshold-based alert flagging, `generate_alert.py` integration with scheduler.
+
+### Phase 6: Tests — TODO
+Test suite for deduplication, sellout detection, content generation, AI curator (mocked), and scraper date parsing.
