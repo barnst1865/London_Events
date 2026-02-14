@@ -1,9 +1,9 @@
 """Barbican Centre web scraper."""
 import re
-from typing import List
+from typing import List, Optional, Tuple
 from datetime import datetime
 import logging
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 from .base_scraper import BaseScraper
 from ..base import EventData
 
@@ -14,6 +14,10 @@ class BarbicanScraper(BaseScraper):
     """
     Scraper for Barbican Centre events.
     Website: https://www.barbican.org.uk/whats-on
+
+    The Barbican listing page uses div.search-listing--event cards.
+    Dates are NOT on the listing page — they require fetching each
+    event's detail page, which has <time datetime="..."> elements.
     """
 
     BASE_URL = "https://www.barbican.org.uk"
@@ -37,7 +41,6 @@ class BarbicanScraper(BaseScraper):
         events = []
 
         try:
-            # Get listing page URLs
             listing_urls = self._get_listing_urls(start_date, end_date)
 
             for url in listing_urls:
@@ -50,7 +53,6 @@ class BarbicanScraper(BaseScraper):
                 if not soup:
                     continue
 
-                # Parse events from listing page
                 page_events = self._parse_listing_page(soup, url)
                 events.extend(page_events)
 
@@ -58,9 +60,13 @@ class BarbicanScraper(BaseScraper):
             logger.error(f"Barbican scraping error: {e}")
             raise
 
-        # Filter by date range
+        # Filter by date range and validate
         filtered_events = []
+        seen_ids = set()
         for event in events:
+            if event.source_id in seen_ids:
+                continue
+            seen_ids.add(event.source_id)
             if event.start_date and start_date <= event.start_date <= end_date:
                 if self.validate_event(event):
                     filtered_events.append(event)
@@ -70,202 +76,212 @@ class BarbicanScraper(BaseScraper):
 
     def _get_listing_urls(self, start_date, end_date) -> list:
         """Get event listing URLs to scrape."""
-        # Barbican has art form-based listings
-        urls = [
-            f"{self.EVENTS_URL}",
-            f"{self.EVENTS_URL}/music",
-            f"{self.EVENTS_URL}/theatre",
-            f"{self.EVENTS_URL}/dance",
-            f"{self.EVENTS_URL}/film",
-            f"{self.EVENTS_URL}/art",
-            f"{self.EVENTS_URL}/family",
-        ]
-        return urls
+        return [self.EVENTS_URL]
 
     def _parse_listing_page(self, soup: BeautifulSoup, page_url: str) -> list:
-        """Parse event listing page."""
+        """Parse event listing page and fetch detail pages for dates."""
         events = []
 
-        # Barbican uses event cards and listing items
-        event_containers = soup.find_all(
-            ["div", "article", "li", "a"],
-            class_=re.compile(r"event|card|listing|performance|show|tile", re.IGNORECASE)
-        )
+        listings = soup.find_all("div", class_="search-listing--event")
+        logger.debug(f"Found {len(listings)} search-listing--event elements on {page_url}")
 
-        # Also look for event links
-        if not event_containers:
-            event_containers = soup.find_all("a", href=re.compile(r"/whats-on/\d+/"))
-
-        for container in event_containers:
+        for listing in listings:
             try:
-                event = self._parse_event_card(container, page_url)
+                event = self._parse_listing_card(listing, page_url)
                 if event:
                     events.append(event)
+            except ValueError as e:
+                logger.debug(f"Skipping Barbican listing: {e}")
             except Exception as e:
-                logger.debug(f"Error parsing event card: {e}")
-                continue
+                logger.warning(f"Unexpected error parsing Barbican listing: {e}")
 
         return events
 
-    def _parse_event_card(self, card, page_url: str) -> EventData:
-        """Parse individual event card."""
-        try:
-            # Extract title
-            title_elem = card.find(["h1", "h2", "h3", "h4", "h5"], class_=re.compile(r"title|name|heading", re.IGNORECASE))
-            if not title_elem:
-                title_elem = card.find(["h1", "h2", "h3", "h4", "h5"])
-            if not title_elem:
-                return None
-            title = title_elem.get_text(strip=True)
-
-            # Extract URL
-            link_elem = card.find("a", href=True)
-            if not link_elem:
-                if card.name == "a" and card.get("href"):
-                    link_elem = card
-                else:
-                    return None
-
-            event_url = link_elem["href"]
-            if not event_url.startswith("http"):
-                event_url = self.BASE_URL + event_url
-
-            # Skip non-event URLs
-            if "/whats-on/" not in event_url:
-                return None
-
-            # Generate unique ID from URL
-            source_id = event_url.split("/")[-1] or event_url.split("/")[-2]
-            source_id = re.sub(r"[?#].*", "", source_id)
-
-            # Extract image
-            img_elem = card.find("img")
-            image_url = None
-            if img_elem:
-                image_url = img_elem.get("src") or img_elem.get("data-src") or img_elem.get("data-lazy-src")
-                if image_url and not image_url.startswith("http"):
-                    if image_url.startswith("//"):
-                        image_url = "https:" + image_url
-                    else:
-                        image_url = self.BASE_URL + image_url
-
-            # Extract description
-            desc_elem = card.find(["p", "div"], class_=re.compile(r"description|excerpt|summary|content|teaser", re.IGNORECASE))
-            description = desc_elem.get_text(strip=True) if desc_elem else None
-
-            # Extract date
-            date_elem = card.find(["time", "span", "div"], class_=re.compile(r"date|time|when", re.IGNORECASE))
-            start_date = self._parse_date(date_elem.get_text(strip=True) if date_elem else None)
-
-            # Check for datetime attribute
-            if date_elem and date_elem.name == "time" and date_elem.get("datetime"):
-                try:
-                    start_date = datetime.fromisoformat(date_elem["datetime"].replace("Z", "+00:00"))
-                except:
-                    pass
-
-            # Extract price info
-            price_elem = card.find(["span", "div"], class_=re.compile(r"price|cost|ticket|from", re.IGNORECASE))
-            price_min, price_max = self._parse_price(price_elem.get_text(strip=True) if price_elem else None)
-
-            # Extract venue (Barbican has multiple venues)
-            venue_elem = card.find(["span", "div"], class_=re.compile(r"venue|location|hall", re.IGNORECASE))
-            venue_name = venue_elem.get_text(strip=True) if venue_elem else "Barbican Centre"
-            # Ensure it includes "Barbican" in the name
-            if "barbican" not in venue_name.lower():
-                venue_name = f"{venue_name}, Barbican Centre" if venue_name != "Barbican Centre" else venue_name
-
-            # Determine category
-            categories = []
-            category = self._determine_category(page_url, title, description or "")
-            if category:
-                categories.append(category)
-
-            return EventData(
-                title=title,
-                description=description,
-                start_date=start_date,
-                source_name=self.name,
-                source_id=source_id,
-                source_url=event_url,
-                venue_name=venue_name,
-                venue_address="Silk Street, London EC2Y 8DS",
-                ticket_url=event_url,
-                price_min=price_min,
-                price_max=price_max,
-                image_url=image_url,
-                categories=categories,
-            )
-
-        except Exception as e:
-            logger.debug(f"Error parsing event card: {e}")
+    def _parse_listing_card(self, card: Tag, page_url: str) -> Optional[EventData]:
+        """Parse a search-listing card and fetch detail page for date."""
+        # Extract title
+        title_elem = card.find("h2", class_="listing-title")
+        if not title_elem:
+            return None
+        title = title_elem.get_text(strip=True)
+        if not title:
             return None
 
-    def _parse_date(self, date_text: str) -> datetime:
-        """Parse date from text."""
-        if not date_text:
-            return datetime.now()
+        # Extract URL
+        link_elem = card.find("a", class_="search-listing__link")
+        if not link_elem or not link_elem.get("href"):
+            return None
+        event_url = link_elem["href"]
+        if not event_url.startswith("http"):
+            event_url = self.BASE_URL + event_url
 
-        try:
-            # Try common date formats
-            date_patterns = [
-                r"(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})",
-                r"(\d{1,2})[/-](\d{1,2})[/-](\d{4})",
-                r"(\d{4})-(\d{2})-(\d{2})",
-            ]
+        # Generate source ID from URL path
+        source_id = event_url.rstrip("/").split("/")[-1]
+        source_id = re.sub(r"[?#].*", "", source_id)
+        if not source_id:
+            return None
 
-            for pattern in date_patterns:
-                match = re.search(pattern, date_text, re.IGNORECASE)
-                if match:
-                    try:
-                        from dateutil import parser
-                        return parser.parse(match.group(0))
-                    except:
-                        pass
+        # Extract description from listing
+        intro_elem = card.find("div", class_="search-listing__intro")
+        description = intro_elem.get_text(strip=True) if intro_elem else None
 
-            # Fallback: try parsing the whole text
-            from dateutil import parser
-            return parser.parse(date_text, fuzzy=True)
-        except:
-            return datetime.now()
+        # Extract image
+        image_url = None
+        img_elem = card.find("img")
+        if img_elem:
+            image_url = img_elem.get("src") or img_elem.get("data-src")
+            if image_url and not image_url.startswith("http"):
+                if image_url.startswith("//"):
+                    image_url = "https:" + image_url
+                else:
+                    image_url = self.BASE_URL + image_url
 
-    def _parse_price(self, price_text: str) -> tuple:
-        """Parse price from text. Returns (min_price, max_price)."""
-        if not price_text:
-            return None, None
+        # Extract category tags
+        categories = []
+        tags_div = card.find("div", class_="tags")
+        if tags_div:
+            for tag_span in tags_div.find_all("span", class_="tag__plain"):
+                tag_text = tag_span.get_text(strip=True).lower()
+                mapped = self._map_category(tag_text)
+                if mapped and mapped not in categories:
+                    categories.append(mapped)
+        if not categories:
+            categories = [self._determine_category(page_url, title, description or "")]
 
-        try:
-            price_text = price_text.lower()
-            if "free" in price_text:
-                return 0.0, 0.0
+        # Extract price label (e.g., "Free")
+        price_min, price_max = None, None
+        label_elem = card.find("div", class_="search-listing__label")
+        if label_elem:
+            label_text = label_elem.get_text(strip=True).lower()
+            if "free" in label_text:
+                price_min, price_max = 0.0, 0.0
 
-            # Extract all numbers that look like prices
-            prices = re.findall(r"£?(\d+(?:\.\d{2})?)", price_text)
-            if prices:
-                prices = [float(p) for p in prices]
-                return min(prices), max(prices)
-        except:
-            pass
+        # Fetch detail page for date
+        start_date = self._fetch_detail_date(event_url)
+        if start_date is None:
+            logger.debug(f"Skipping '{title}': no parseable date from detail page")
+            return None
 
-        return None, None
+        # Extract venue from detail page URL pattern or default
+        venue_name = "Barbican Centre"
+
+        return EventData(
+            title=title,
+            description=description,
+            start_date=start_date,
+            source_name=self.name,
+            source_id=source_id,
+            source_url=event_url,
+            venue_name=venue_name,
+            venue_address="Silk Street, London EC2Y 8DS",
+            ticket_url=event_url,
+            price_min=price_min,
+            price_max=price_max,
+            image_url=image_url,
+            categories=categories,
+        )
+
+    def _fetch_detail_date(self, detail_url: str) -> Optional[datetime]:
+        """Fetch an event detail page and extract the start date."""
+        response = self._make_request(detail_url)
+        if not response:
+            return None
+
+        soup = self._parse_html(response.text)
+        if not soup:
+            return None
+
+        # Try <time> elements with datetime attribute (most reliable)
+        time_elements = soup.find_all("time", attrs={"datetime": True})
+        if time_elements:
+            try:
+                dt_str = time_elements[0]["datetime"]
+                # Handle ISO format: 2026-01-30T11:00:00Z
+                return datetime.fromisoformat(dt_str.replace("Z", "+00:00")).replace(tzinfo=None)
+            except (ValueError, TypeError) as e:
+                logger.debug(f"Could not parse <time> datetime '{dt_str}': {e}")
+
+        # Try event-byline__date span
+        byline_date = soup.find("span", class_="event-byline__date")
+        if byline_date:
+            date_range = byline_date.find("span", class_="date-range")
+            if date_range:
+                return self._parse_date_range_text(date_range.get_text(strip=True))
+
+        return None
+
+    def _parse_date_range_text(self, text: str) -> Optional[datetime]:
+        """
+        Parse date range text like 'Fri 30 Jan – Sun 19 Apr 2026'.
+        Returns the start date.
+        """
+        if not text:
+            return None
+
+        # Split on dash/en-dash to get start date
+        parts = re.split(r"[–\-]", text, maxsplit=1)
+        start_text = parts[0].strip()
+        # If start doesn't have year, get year from end part
+        year = None
+        if len(parts) > 1:
+            year_match = re.search(r"(\d{4})", parts[1])
+            if year_match:
+                year = int(year_match.group(1))
+
+        # Parse "Fri 30 Jan" or "30 Jan 2026"
+        match = re.search(
+            r"(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*(?:\s+(\d{4}))?",
+            start_text,
+            re.IGNORECASE,
+        )
+        if match:
+            try:
+                day = int(match.group(1))
+                month = self._month_to_int(match.group(2))
+                if match.group(3):
+                    year = int(match.group(3))
+                if year is None:
+                    year = datetime.now().year
+                if month:
+                    return datetime(year, month, day)
+            except (ValueError, TypeError):
+                pass
+
+        return None
+
+    def _month_to_int(self, month_text: str) -> Optional[int]:
+        """Convert month abbreviation to integer."""
+        months = {
+            "jan": 1, "feb": 2, "mar": 3, "apr": 4,
+            "may": 5, "jun": 6, "jul": 7, "aug": 8,
+            "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+        }
+        return months.get(month_text.lower().strip()[:3])
+
+    def _map_category(self, tag_text: str) -> Optional[str]:
+        """Map Barbican tag text to standardized category."""
+        mapping = {
+            "music": "music",
+            "classical music": "classical",
+            "contemporary music": "music",
+            "theatre": "theatre",
+            "dance": "dance",
+            "film": "film",
+            "cinema": "film",
+            "art & design": "arts",
+            "art": "arts",
+            "visual arts": "arts",
+            "family": "family",
+            "talks & events": "talks",
+            "talks": "talks",
+            "comedy": "comedy",
+            "library": "arts",
+            "tours & public spaces": "arts",
+        }
+        return mapping.get(tag_text.lower())
 
     def _determine_category(self, page_url: str, title: str, description: str) -> str:
-        """Determine event category."""
-        # Check URL first
-        if "/music" in page_url.lower():
-            return "music"
-        elif "/theatre" in page_url.lower():
-            return "theatre"
-        elif "/dance" in page_url.lower():
-            return "dance"
-        elif "/film" in page_url.lower():
-            return "film"
-        elif "/art" in page_url.lower():
-            return "arts"
-        elif "/family" in page_url.lower():
-            return "family"
-
-        # Check title/description for keywords
+        """Determine event category from URL and content."""
         combined = (title + " " + description).lower()
         if any(word in combined for word in ["concert", "music", "orchestra", "classical"]):
             return "music"
@@ -279,7 +295,6 @@ class BarbicanScraper(BaseScraper):
             return "arts"
         elif any(word in combined for word in ["family", "kids", "children"]):
             return "family"
-
         return "arts"
 
     def get_rate_limit_delay(self) -> float:

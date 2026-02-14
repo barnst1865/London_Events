@@ -123,8 +123,16 @@ The project is being restructured from a self-hosted newsletter service into a S
 ### Phase 1: Strip Infrastructure + Build Core Pipeline — DONE
 Removed auth, payments, email delivery, subscription infrastructure (~1,100 lines deleted). Added AI curator, content generator, and CLI entry points (~700 lines added). The app now produces Substack-ready HTML via `generate_newsletter.py` and `generate_alert.py`.
 
-### Phase 2: Fix Existing Scrapers — TODO (start here)
-The 5 existing scrapers (`timeout_london.py`, `o2_arena.py`, `royal_albert_hall.py`, `barbican.py`, `southbank_centre.py`) have fragile date parsing, guessed CSS selectors, and default to `datetime.now()` when parsing fails. Each scraper needs to be validated against its live site and fixed to skip events it can't parse cleanly rather than inserting garbage data.
+### Phase 2: Fix Existing Scrapers — DONE
+All 5 scrapers validated against live sites. Eliminated all `datetime.now()` fallbacks, bare `except:` clauses, and guessed CSS selectors. Scrapers now skip events they can't parse cleanly instead of inserting garbage data.
+
+- **O2 Arena** (`o2_arena.py`): Fully working. Uses real selectors (`div.eventItem`, `m-date__day/month/year` spans). Parses dates from O2's structured date spans. Skips Vue.js template items. Returns ~22 events per scrape.
+- **Barbican** (`barbican.py`): Fully working. Uses real selectors (`div.search-listing--event`, `h2.listing-title`). Fetches detail pages to extract dates from `<time datetime="">` elements since listing page lacks dates. Returns ~5-15 events per scrape.
+- **Time Out London** (`timeout_london.py`): Disabled (`is_enabled=False`). Site serves editorial listicles, not structured event listings — no dates, venues, or prices available on listing pages.
+- **Royal Albert Hall** (`royal_albert_hall.py`): Disabled (`is_enabled=False`). Cloudflare "Pardon Our Interruption" blocks all httpx requests.
+- **Southbank Centre** (`southbank_centre.py`): Disabled (`is_enabled=False`). Cloudflare 403 blocks all httpx requests.
+
+The 3 disabled scrapers need headless browser support (Phase 4 consideration) or alternative data sources.
 
 ### Phase 3: Expand Data Sources — West End & Large Venues — TODO
 Add Official London Theatre (West End), Alexandra Palace, Roundhouse, KOKO, Eventim Apollo, Brixton Academy scrapers.
