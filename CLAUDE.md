@@ -134,8 +134,15 @@ All 5 scrapers validated against live sites. Eliminated all `datetime.now()` fal
 
 The 3 disabled scrapers need headless browser support (Phase 4 consideration) or alternative data sources.
 
-### Phase 3: Expand Data Sources — West End & Large Venues — TODO
-Add Official London Theatre (West End), Alexandra Palace, Roundhouse, KOKO, Eventim Apollo, Brixton Academy scrapers.
+### Phase 3: Expand Data Sources — West End & Large Venues — DONE
+Added 5 new scrapers covering West End theatre and major London venues.
+
+- **Official London Theatre** (`official_london_theatre.py`): Fully working. Uses WordPress REST API (`/wp-json/wp/v2/show`) — structured JSON, no HTML parsing. Caches venue name lookups. Maps genre taxonomy to categories. Returns ~164 West End shows.
+- **KOKO** (`koko.py`): Fully working. Parses `<script id="__NEXT_DATA__">` JSON from Next.js app (CSS classes are Emotion-hashed, unusable). Extracts events from `props.pageProps.data.events.nodes[]`. Returns ~70+ events.
+- **Roundhouse** (`roundhouse.py`): Fully working. Server-rendered HTML with `.event-card` selectors. Parses date ranges from `.event-card__date` text. Returns ~20-40 events.
+- **Alexandra Palace** (`alexandra_palace.py`): Fully working. Server-rendered HTML with `.event_card` selectors (underscore). Parses dates from `.date-panel` elements. Returns ~20-40 events.
+- **Eventim Apollo** (`eventim_apollo.py`): Fully working. Server-rendered HTML with `.card` selectors. Parses dates from `.date` elements. Returns ~20-40 events.
+- **Brixton Academy**: Skipped — React SPA needs headless browser, events already covered by Ticketmaster API.
 
 ### Phase 4: Expand Data Sources — DICE & Resident Advisor — TODO
 Cover indie/alternative (dice.fm) and electronic/club scenes (ra.co). JS-heavy sites may need headless browser.

@@ -13,6 +13,11 @@ from .scrapers.o2_arena import O2ArenaScraper
 from .scrapers.royal_albert_hall import RoyalAlbertHallScraper
 from .scrapers.barbican import BarbicanScraper
 from .scrapers.southbank_centre import SouthbankCentreScraper
+from .scrapers.official_london_theatre import OfficialLondonTheatreScraper
+from .scrapers.koko import KokoScraper
+from .scrapers.roundhouse import RoundhouseScraper
+from .scrapers.alexandra_palace import AlexandraPalaceScraper
+from .scrapers.eventim_apollo import EventimApolloScraper
 
 
 # Registry of all available data sources
@@ -26,6 +31,11 @@ DATA_SOURCES: List[Type[BaseDataSource]] = [
     RoyalAlbertHallScraper,
     BarbicanScraper,
     SouthbankCentreScraper,
+    OfficialLondonTheatreScraper,
+    KokoScraper,
+    RoundhouseScraper,
+    AlexandraPalaceScraper,
+    EventimApolloScraper,
 ]
 
 
