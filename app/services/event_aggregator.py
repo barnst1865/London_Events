@@ -8,7 +8,7 @@ from sqlalchemy import and_
 
 from ..data_sources import get_enabled_sources
 from ..data_sources.base import EventData
-from ..models.database import Event, DataSource, EventStatus
+from ..models.database import Event, DataSource, EventStatus, AvailabilityHistory
 from ..config import settings
 from .sellout_detector import SelloutDetector
 
@@ -198,7 +198,7 @@ class EventAggregator:
         event.on_sale_status = event_data.on_sale_status or event.on_sale_status
         event.image_url = event_data.image_url or event.image_url
 
-        # Update availability data
+        # Update availability data if ticket counts provided
         if event_data.tickets_available is not None:
             event.tickets_available = event_data.tickets_available
             event.total_tickets = event_data.total_tickets or event.total_tickets
@@ -206,17 +206,41 @@ class EventAggregator:
                 event_data.tickets_available,
                 event.total_tickets
             )
-            event.last_availability_check = datetime.utcnow()
 
-            # Update status based on availability
-            event.status = self.sellout_detector.determine_status(
-                tickets_available=event_data.tickets_available,
-                total_tickets=event.total_tickets,
-                on_sale_status=event_data.on_sale_status
-            )
+        # Always recalculate status (covers both ticket-count and on_sale_status paths)
+        new_status = self.sellout_detector.determine_status(
+            tickets_available=event_data.tickets_available or event.tickets_available,
+            total_tickets=event_data.total_tickets or event.total_tickets,
+            on_sale_status=event_data.on_sale_status or event.on_sale_status,
+            previous_availability=event.tickets_available,
+            last_check=event.last_availability_check,
+            event_date=event.start_date,
+        )
 
+        # Record history if status changed
+        if new_status != event.status:
+            self._record_status_change(event, new_status)
+
+        event.status = new_status
+        event.last_availability_check = datetime.utcnow()
         event.raw_data = event_data.raw_data
         event.updated_at = datetime.utcnow()
+
+    def _record_status_change(self, event: Event, new_status: EventStatus):
+        """Record a status transition in availability_history."""
+        history = AvailabilityHistory(
+            event_id=event.id,
+            previous_status=event.status,
+            new_status=new_status,
+            tickets_available=event.tickets_available,
+            total_tickets=event.total_tickets,
+            availability_percentage=event.availability_percentage,
+        )
+        self.db.add(history)
+        event.previous_status = event.status
+        logger.info(
+            f"Status change: '{event.title}' {event.status.value if event.status else 'None'} -> {new_status.value}"
+        )
 
     def _find_duplicate(self, event_data: EventData) -> Event:
         """

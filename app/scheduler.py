@@ -7,6 +7,7 @@ import pytz
 
 from .database import SessionLocal
 from .services.event_aggregator import EventAggregator
+from .services.sellout_monitor import SelloutMonitor
 from .config import settings
 
 logger = logging.getLogger(__name__)
@@ -18,7 +19,8 @@ class EventScheduler:
 
     Runs:
     1. Daily event refresh at 3 AM (next 90 days)
-    2. Weekly content generation trigger (logs reminder, actual generation is CLI-driven)
+    2. Sellout monitoring at 3:30 AM (checks for alert-worthy status changes)
+    3. Weekly content generation trigger (logs reminder, actual generation is CLI-driven)
     """
 
     def __init__(self):
@@ -38,6 +40,18 @@ class EventScheduler:
             name="Daily event data refresh",
             replace_existing=True,
         )
+
+        # Sellout monitoring at 3:30 AM (after daily fetch completes)
+        if settings.sellout_monitor_enabled:
+            self.scheduler.add_job(
+                self.check_sellout_alerts,
+                trigger="cron",
+                hour=3,
+                minute=30,
+                id="sellout_monitor",
+                name="Sellout alert monitoring",
+                replace_existing=True,
+            )
 
         # Weekly reminder to generate newsletter (day of week configurable)
         self.scheduler.add_job(
@@ -78,6 +92,25 @@ class EventScheduler:
 
         except Exception as e:
             logger.error(f"Daily event refresh failed: {e}")
+        finally:
+            db.close()
+
+    def check_sellout_alerts(self):
+        """Check for sellout alerts after daily refresh."""
+        logger.info("Starting sellout alert check")
+
+        db = SessionLocal()
+        try:
+            monitor = SelloutMonitor()
+            result_path = monitor.generate_and_save_alert(db)
+
+            if result_path:
+                logger.info(f"Sellout alert generated: {result_path}")
+            else:
+                logger.info("No sellout alert needed")
+
+        except Exception as e:
+            logger.error(f"Sellout alert check failed: {e}")
         finally:
             db.close()
 

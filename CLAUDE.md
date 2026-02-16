@@ -35,7 +35,8 @@ python manage.py fetch --days 60 --sources ticketmaster,eventbrite
 python generate_newsletter.py      # -> output/newsletter_YYYY-MM-DD.html
 
 # Generate selling-fast alert
-python generate_alert.py           # -> output/alert_YYYY-MM-DD.html
+python generate_alert.py           # -> output/alert_YYYY-MM-DD.html (manual)
+python generate_alert.py --auto    # scheduler mode: exit 0 = alert generated
 
 # Trigger event fetch via API
 curl -X POST http://localhost:8000/api/events/fetch
@@ -61,9 +62,11 @@ All event data sources inherit from `BaseDataSource` (`app/data_sources/base.py`
 
 `app/services/event_aggregator.py` fetches from all enabled sources and performs fuzzy duplicate detection using `difflib.SequenceMatcher` (>85% title similarity + >75% venue similarity = duplicate).
 
-### Sellout Detection
+### Sellout Detection & Monitoring
 
 `app/services/sellout_detector.py` analyzes ticket availability with thresholds: SOLD_OUT (0 tickets), SELLING_FAST (<10% or <50 tickets remaining), ON_SALE, UPCOMING, CANCELLED. Includes rate-of-sale projections.
+
+`app/services/sellout_monitor.py` checks `availability_history` for recent status transitions and generates alerts when thresholds are met. Runs automatically at 3:30 AM via scheduler.
 
 ### AI Curation
 
@@ -90,6 +93,7 @@ Falls back to deterministic scoring when no API key is configured.
 
 `app/scheduler.py` runs APScheduler cron jobs:
 - Daily event data refresh at 3 AM (next 90 days)
+- Sellout alert monitoring at 3:30 AM (checks for status changes, generates alert if thresholds met)
 - Weekly generation reminder (configurable day/time)
 
 Newsletter generation is triggered manually via CLI.
@@ -100,8 +104,8 @@ Newsletter generation is triggered manually via CLI.
 |-------|----------|---------|
 | API routes | `app/api/events.py` | FastAPI endpoints (events, categories) |
 | Data sources | `app/data_sources/` | Plugin-based event fetching |
-| Services | `app/services/` | Aggregation, sellout detection, AI curation, content generation |
-| Models | `app/models/database.py` | SQLAlchemy ORM (events, categories, event_categories, data_sources) |
+| Services | `app/services/` | Aggregation, sellout detection, sellout monitoring, AI curation, content generation |
+| Models | `app/models/database.py` | SQLAlchemy ORM (events, categories, event_categories, data_sources, availability_history) |
 | Schemas | `app/models/schemas.py` | Pydantic request/response validation |
 | Config | `app/config.py` | Pydantic-settings from env vars |
 | DB setup | `app/database.py` | SQLAlchemy engine & session factory |
@@ -110,7 +114,7 @@ Newsletter generation is triggered manually via CLI.
 
 ### Database
 
-PostgreSQL with SQLAlchemy ORM. No Alembic migrations — schema created via `Base.metadata.create_all()`. Tables: events, categories, event_categories, data_sources.
+PostgreSQL with SQLAlchemy ORM. No Alembic migrations — schema created via `Base.metadata.create_all()`. Tables: events, categories, event_categories, data_sources, availability_history.
 
 ## Environment
 
@@ -150,8 +154,15 @@ Added 2 new sources covering indie/alternative and electronic/club scenes.
 - **DICE** (`dice.py`): Fully working. Next.js app — extracts `__NEXT_DATA__` JSON from category pages (same pattern as KOKO). Iterates 9 category URLs (music/gig, music/dj, music/party, culture/comedy, etc.), deduplicates by event ID across categories. Parses `date_unix` timestamps, prices in pence, sold-out status. Returns ~200 events per scrape.
 - **Resident Advisor** (`resident_advisor.py`): Fully working. Uses open GraphQL API at `ra.co/graphql` (no auth). Introspects Event type on first call to discover `startTime` field dynamically. Queries POPULAR, TODAY, and PICKS event types. Parses ISO 8601 dates, `£` prices from cost strings, venue names/addresses. Returns ~50 events per scrape. Will self-disable if introspection fails to find a date field.
 
-### Phase 5: Sellout Alert System — TODO
-Automated availability monitoring, threshold-based alert flagging, `generate_alert.py` integration with scheduler.
+### Phase 5: Sellout Alert System — DONE
+Automated availability monitoring with status change tracking, threshold-based alert flagging, and scheduler-triggered alert generation.
+
+- **AvailabilityHistory table** (`database.py`): Tracks every status transition (previous_status → new_status) with timestamps, ticket counts, and availability percentages. `Event.previous_status` column added for quick lookups.
+- **Status update fix** (`event_aggregator.py`): `_update_event()` now always recalculates status — covers both ticket-count and `on_sale_status` paths. Previously, scrapers providing only `on_sale_status` (DICE, O2, KOKO, etc.) never got status updates on re-fetch. Status changes are recorded in `availability_history`.
+- **Sellout detector fix** (`sellout_detector.py`): Now recognizes `"sold_out"` and `"sold-out"` strings alongside `"soldout"`.
+- **SelloutMonitor** (`sellout_monitor.py`): New service that queries `availability_history` for recent transitions, groups into newly-selling-fast and newly-sold-out, and generates alerts when thresholds are met (configurable: ≥1 selling-fast OR ≥3 sold-out).
+- **Scheduler integration** (`scheduler.py`): Sellout monitoring job runs at 3:30 AM daily (30 min after fetch). Configurable via `SELLOUT_MONITOR_ENABLED` env var.
+- **Alert CLI** (`generate_alert.py`): Added `--auto` flag for scheduler-triggered runs (exit 0 = alert generated, exit 1 = no alert). Manual mode now includes recently sold-out events alongside selling-fast.
 
 ### Phase 6: Tests — TODO
 Test suite for deduplication, sellout detection, content generation, AI curator (mocked), and scraper date parsing.

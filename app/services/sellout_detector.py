@@ -47,7 +47,9 @@ class SelloutDetector:
             EventStatus enum value
         """
         # Check if sold out
-        if tickets_available == 0 or (on_sale_status and on_sale_status == "soldout"):
+        if tickets_available == 0 or (
+            on_sale_status and on_sale_status in ["soldout", "sold_out", "sold-out"]
+        ):
             return EventStatus.SOLD_OUT
 
         # Check if cancelled

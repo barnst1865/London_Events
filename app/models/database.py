@@ -81,6 +81,9 @@ class Event(Base):
     availability_percentage = Column(Float)
     last_availability_check = Column(DateTime)
 
+    # Status tracking
+    previous_status = Column(SQLEnum(EventStatus))
+
     # Source Tracking
     source_name = Column(String(100), nullable=False, index=True)
     source_id = Column(String(255), nullable=False)
@@ -100,6 +103,22 @@ class Event(Base):
 
     # Relationships
     categories = relationship("Category", secondary=event_categories, back_populates="events")
+
+
+class AvailabilityHistory(Base):
+    """Tracks status changes for sellout monitoring."""
+    __tablename__ = "availability_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_id = Column(Integer, ForeignKey("events.id"), nullable=False, index=True)
+    previous_status = Column(SQLEnum(EventStatus))
+    new_status = Column(SQLEnum(EventStatus), nullable=False)
+    tickets_available = Column(Integer)
+    total_tickets = Column(Integer)
+    availability_percentage = Column(Float)
+    recorded_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    event = relationship("Event")
 
 
 class DataSource(Base):

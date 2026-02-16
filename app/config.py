@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     sellout_threshold_percentage: int = 10
     low_availability_threshold: int = 50
 
+    # Sellout Alert System
+    sellout_alert_min_selling_fast: int = 1
+    sellout_alert_min_sold_out: int = 3
+    sellout_monitor_enabled: bool = True
+
     # Web Scraping
     scraping_user_agent: str = "Mozilla/5.0 (compatible; LondonEventsBot/1.0)"
     scraping_delay: int = 2
