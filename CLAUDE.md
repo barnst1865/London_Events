@@ -55,7 +55,7 @@ flake8
 All event data sources inherit from `BaseDataSource` (`app/data_sources/base.py`) and must implement `name`, `source_type`, `fetch_events()`, and `is_enabled()`. Sources return standardized `EventData` objects. New sources are registered in the `DATA_SOURCES` list in `app/data_sources/__init__.py`.
 
 **API sources:** Ticketmaster, Eventbrite, SeatGeek (in `app/data_sources/`)
-**Scrapers:** Time Out London, O2 Arena, Royal Albert Hall, Barbican, Southbank Centre (in `app/data_sources/scrapers/`). Scrapers extend `BaseScraper` (`app/data_sources/scrapers/base_scraper.py`).
+**Scrapers:** Time Out London, O2 Arena, Royal Albert Hall, Barbican, Southbank Centre, Official London Theatre, KOKO, Roundhouse, Alexandra Palace, Eventim Apollo, DICE, Resident Advisor (in `app/data_sources/scrapers/`). Scrapers extend `BaseScraper` (`app/data_sources/scrapers/base_scraper.py`).
 
 ### Event Aggregation & Deduplication
 
@@ -144,8 +144,11 @@ Added 5 new scrapers covering West End theatre and major London venues.
 - **Eventim Apollo** (`eventim_apollo.py`): Fully working. Server-rendered HTML with `.card` selectors. Parses dates from `.date` elements. Returns ~20-40 events.
 - **Brixton Academy**: Skipped — React SPA needs headless browser, events already covered by Ticketmaster API.
 
-### Phase 4: Expand Data Sources — DICE & Resident Advisor — TODO
-Cover indie/alternative (dice.fm) and electronic/club scenes (ra.co). JS-heavy sites may need headless browser.
+### Phase 4: Expand Data Sources — DICE & Resident Advisor — DONE
+Added 2 new sources covering indie/alternative and electronic/club scenes.
+
+- **DICE** (`dice.py`): Fully working. Next.js app — extracts `__NEXT_DATA__` JSON from category pages (same pattern as KOKO). Iterates 9 category URLs (music/gig, music/dj, music/party, culture/comedy, etc.), deduplicates by event ID across categories. Parses `date_unix` timestamps, prices in pence, sold-out status. Returns ~200 events per scrape.
+- **Resident Advisor** (`resident_advisor.py`): Fully working. Uses open GraphQL API at `ra.co/graphql` (no auth). Introspects Event type on first call to discover `startTime` field dynamically. Queries POPULAR, TODAY, and PICKS event types. Parses ISO 8601 dates, `£` prices from cost strings, venue names/addresses. Returns ~50 events per scrape. Will self-disable if introspection fails to find a date field.
 
 ### Phase 5: Sellout Alert System — TODO
 Automated availability monitoring, threshold-based alert flagging, `generate_alert.py` integration with scheduler.

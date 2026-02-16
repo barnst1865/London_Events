@@ -18,6 +18,8 @@ from .scrapers.koko import KokoScraper
 from .scrapers.roundhouse import RoundhouseScraper
 from .scrapers.alexandra_palace import AlexandraPalaceScraper
 from .scrapers.eventim_apollo import EventimApolloScraper
+from .scrapers.dice import DiceScraper
+from .scrapers.resident_advisor import ResidentAdvisorScraper
 
 
 # Registry of all available data sources
@@ -36,6 +38,8 @@ DATA_SOURCES: List[Type[BaseDataSource]] = [
     RoundhouseScraper,
     AlexandraPalaceScraper,
     EventimApolloScraper,
+    DiceScraper,
+    ResidentAdvisorScraper,
 ]
 
 
