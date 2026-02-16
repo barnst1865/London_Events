@@ -135,6 +135,6 @@ class DataSource(Base):
     events_fetched_count = Column(Integer, default=0)
     success_rate = Column(Float, default=1.0)
     average_fetch_time = Column(Float)  # Seconds
-    metadata = Column(JSON)
+    source_metadata = Column("metadata", JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

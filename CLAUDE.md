@@ -164,5 +164,13 @@ Automated availability monitoring with status change tracking, threshold-based a
 - **Scheduler integration** (`scheduler.py`): Sellout monitoring job runs at 3:30 AM daily (30 min after fetch). Configurable via `SELLOUT_MONITOR_ENABLED` env var.
 - **Alert CLI** (`generate_alert.py`): Added `--auto` flag for scheduler-triggered runs (exit 0 = alert generated, exit 1 = no alert). Manual mode now includes recently sold-out events alongside selling-fast.
 
-### Phase 6: Tests — TODO
-Test suite for deduplication, sellout detection, content generation, AI curator (mocked), and scraper date parsing.
+### Phase 6: Tests — DONE
+142 tests covering deduplication, sellout detection, content generation, AI curator (mocked), and scraper date parsing. All tests run in <2s with no network calls and no disk DB (in-memory SQLite).
+
+- **Test infrastructure** (`tests/conftest.py`): Shared fixtures — `db_session` (in-memory SQLite), `make_event` (Event factory), `make_category`. Sets `DATABASE_URL=sqlite:///:memory:` before app imports.
+- **Sellout detection** (`tests/test_sellout_detection.py`): 27 tests covering `determine_status()` for all status paths (SOLD_OUT, CANCELLED, SELLING_FAST, ON_SALE, UPCOMING), `_is_selling_fast_by_rate()` edge cases, `get_sellout_probability()` bounds, and `get_urgency_message()` formatting.
+- **Deduplication** (`tests/test_deduplication.py`): 14 tests for `_similarity()`, `_find_duplicate()` (exact match, fuzzy match, different date/venue, both venues None), and `_calculate_availability_percentage()` edge cases.
+- **Content generation** (`tests/test_content_generation.py`): 16 tests for `_format_price()` (FREE, TBA, ranges, non-GBP), `_render_event_card()` (urgency, ticket links, venue TBA), and `generate_selling_fast_alert()` (empty list, filtering, max 8 cap).
+- **AI curator** (`tests/test_ai_curator.py`): 19 tests for `_fallback_picks()` (scoring, boosts, max_picks), `_fallback_newsletter_intro()`, `_format_events_for_prompt()` (status tags, price formatting), and `curate_editors_picks()` with mocked Anthropic API (success, markdown JSON, API error fallback, invalid ID filtering).
+- **Scraper date parsing** (`tests/test_scraper_date_parsing.py`): 66 tests across 9 scrapers — O2 Arena (date text, price), Barbican (date range), OLT (ACF date), KOKO (event date, door time), Roundhouse (date text with/without year), Alexandra Palace (date text, price), Eventim Apollo (ordinal stripping, month-day format, price), DICE (full event parsing, pence conversion, sold-out status), Resident Advisor (unix int/float/string, ISO 8601 variants, None/garbage).
+- **DataSource model fix** (`app/models/database.py`): Renamed `metadata` column to `source_metadata` (mapped to DB column `metadata`) to resolve conflict with SQLAlchemy's reserved `Base.metadata` attribute on newer SQLAlchemy versions.
