@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)",
+      "Bash(find:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:pypi.org)",
+      "WebFetch(domain:support.substack.com)",
+      "Bash(tree:*)",
+      "Bash(wc:*)",
+      "WebFetch(domain:www.timeout.com)",
+      "WebFetch(domain:www.theo2.co.uk)",
+      "WebFetch(domain:www.royalalberthall.com)",
+      "WebFetch(domain:www.barbican.org.uk)",
+      "WebFetch(domain:www.southbankcentre.co.uk)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "WebFetch(domain:koko.co.uk)",
+      "WebFetch(domain:www.academymusicgroup.com)",
+      "WebFetch(domain:officiallondontheatre.com)",
+      "WebFetch(domain:www.google.com)",
+      "WebFetch(domain:webcache.googleusercontent.com)",
+      "WebFetch(domain:web.archive.org)",
+      "WebFetch(domain:app.ticketmaster.com)",
+      "Bash(set DATABASE_URL=sqlite:///test.db)"
+    ]
+  }
+}
